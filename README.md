@@ -1,3 +1,5 @@
+
+
 ### Programming Exercise – VWAP calculation Description:
 
 Given a stream of price data for multiple currency pairs in the form of:
