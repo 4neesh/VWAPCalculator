@@ -23,17 +23,41 @@ public class VWAPCalculator {
         scheduledExecutorService.scheduleAtFixedRate(this::removePricesBeforeCutoff, 1, 1, TimeUnit.SECONDS);
     }
 
-    public void processPriceUpdate(String currencyPair, double price, long volume){
-        CurrencyPriceData currencyPriceData = new CurrencyPriceData(Instant.now(), currencyPair, price, volume);
-        Deque<CurrencyPriceData> currencyPairStream = currencyPairToPriceStream.computeIfAbsent(currencyPair, currencyPairKey -> new ConcurrentLinkedDeque<>());
-        currencyPairStream.addFirst(currencyPriceData);
+    public void processPriceUpdate(Instant timestamp, String currencyPair, double price, long volume) {
+        try {
+            CurrencyPriceData currencyPriceData = new CurrencyPriceData(timestamp, currencyPair, price, volume);
+            Deque<CurrencyPriceData> currencyPairStream = currencyPairToPriceStream.computeIfAbsent(
+                currencyPair, k -> new ConcurrentLinkedDeque<>()
+            );
+            currencyPairStream.addFirst(currencyPriceData);
 
-        currencyPairToTotalWeightedPrice.compute(currencyPair, (currencyPairKey, totalWeightedPrice) -> (totalWeightedPrice == null ? 0 : totalWeightedPrice) + price * volume);
-        currencyPairToTotalVolume.compute(currencyPair, (currencyPairKey, totalVolume) -> (null == totalVolume ? 0 : totalVolume) + volume);
+            currencyPairToTotalWeightedPrice.computeIfAbsent(currencyPair, k -> new DoubleAdder())
+                .add(price * volume);
+            currencyPairToTotalVolume.computeIfAbsent(currencyPair, k -> new AtomicLong(0))
+                .addAndGet(volume);
 
-        double vwap = currencyPairToTotalWeightedPrice.get(currencyPair) / currencyPairToTotalVolume.get(currencyPair);
-        currencyPairToVWAP.put(currencyPair, vwap);
-        System.out.printf("Updated %s to VWAP of %s\n", currencyPair, vwap);
+            calculateVWAP(currencyPair);
+
+        } catch (Exception e) {
+            LOGGER.error("Error processing price update for {}: {}", currencyPair, e.getMessage());
+            throw new RuntimeException("Failed to process price update", e);
+        }
+    }
+
+    private void calculateVWAP(String currencyPair) {
+        try {
+            double totalWeightedPrice = currencyPairToTotalWeightedPrice.get(currencyPair).sum();
+            long totalVolume = currencyPairToTotalVolume.get(currencyPair).get();
+            
+            if (totalVolume > 0) {
+                double vwap = totalWeightedPrice / totalVolume;
+                currencyPairToVWAP.put(currencyPair, vwap);
+                System.out.printf("Updated %s to VWAP of %s%n", currencyPair, vwap);
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error calculating VWAP for {}: {}", currencyPair, e.getMessage());
+            throw e;
+        }
     }
 
     private void removePricesBeforeCutoff() {
