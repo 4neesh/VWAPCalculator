@@ -1,8 +1,7 @@
 package com.bank.vwap;
 
 import java.time.Instant;
-import java.util.Deque;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -23,10 +22,10 @@ public class VWAPCalculator {
     private final Map<String, DoubleAdder> currencyPairToTotalWeightedPrice = new ConcurrentHashMap<>();
     private final Map<String, AtomicLong> currencyPairToTotalVolume = new ConcurrentHashMap<>();
 
-    private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService scheduledPriceRemovalExecutor = Executors.newSingleThreadScheduledExecutor();
 
     public VWAPCalculator() {
-        scheduledExecutorService.scheduleAtFixedRate(this::removePricesBeforeCutoff, 0, CLEANUP_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        scheduledPriceRemovalExecutor.scheduleAtFixedRate(this::removePricesBeforeCutoff, 0, CLEANUP_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     public void processPriceUpdate(Instant timestamp, String currencyPair, double price, long volume) {
@@ -69,41 +68,56 @@ public class VWAPCalculator {
     private void removePricesBeforeCutoff() {
         try {
             Instant cutoffTime = Instant.now().minusSeconds(3600); // 1 hour
-
-            for (Map.Entry<String, Deque<CurrencyPriceData>> entry : currencyPairToPriceStream.entrySet()) {
+            
+            currencyPairToPriceStream.entrySet().parallelStream().forEach(entry -> {
                 String currencyPair = entry.getKey();
                 Deque<CurrencyPriceData> currencyPairStream = entry.getValue();
                 boolean pricesRemovedFromStream = false;
+                
+                Iterator<CurrencyPriceData> iterator = currencyPairStream.iterator();
+                List<CurrencyPriceData> toRemove = new ArrayList<>();
 
-                while (currencyStreamContainsOutdatedPrices(currencyPairStream, cutoffTime)) {
-                    CurrencyPriceData oldData = currencyPairStream.pollLast();
-                    pricesRemovedFromStream = true;
-                    
-                    currencyPairToTotalWeightedPrice.get(currencyPair)
-                        .add(-oldData.getPrice() * oldData.getVolume());
-                    currencyPairToTotalVolume.get(currencyPair)
-                        .addAndGet(-oldData.getVolume());
-                }
-
-                if (pricesRemovedFromStream) {
-                    long totalVolume = currencyPairToTotalVolume.get(currencyPair).get();
-                    if (totalVolume > 0) {
-                        calculateVWAP(currencyPair);
+                //Step 1 - remove old items from deque
+                while (iterator.hasNext()) {
+                    CurrencyPriceData data = iterator.next();
+                    if (data.getTimestamp().isBefore(cutoffTime)) {
+                        toRemove.add(data);
                     } else {
-                        currencyPairToVWAP.remove(currencyPair);
-                        currencyPairToPriceStream.remove(currencyPair);
-                        currencyPairToTotalWeightedPrice.remove(currencyPair);
-                        currencyPairToTotalVolume.remove(currencyPair);
+                        break;
                     }
                 }
-            }
+
+                //Step 2 - update totalVolume and totalWeightedPrice
+                if (!toRemove.isEmpty()) {
+                    for (CurrencyPriceData oldData : toRemove) {
+                        if (currencyPairStream.remove(oldData)) {
+                            pricesRemovedFromStream = true;
+                            // Use atomic operations with minimal locking
+                            currencyPairToTotalWeightedPrice.get(currencyPair)
+                                .add(-oldData.getPrice() * oldData.getVolume());
+                            currencyPairToTotalVolume.get(currencyPair)
+                                .addAndGet(-oldData.getVolume());
+                        }
+                    }
+
+                    
+                    // Step 3 - Recalculate VWAP calculation or cleanup
+                    if (pricesRemovedFromStream) {
+                        long totalVolume = currencyPairToTotalVolume.get(currencyPair).get();
+                        if (totalVolume > 0) {
+                            calculateVWAP(currencyPair);
+                        } else {
+                            currencyPairToVWAP.remove(currencyPair);
+                            currencyPairToPriceStream.remove(currencyPair);
+                            currencyPairToTotalWeightedPrice.remove(currencyPair);
+                            currencyPairToTotalVolume.remove(currencyPair);
+                        }
+                    }
+                }
+            });
         } catch (Exception e) {
             LOGGER.error("Error during price cleanup: {}", e.getMessage());
         }
-    }
-
-    private boolean currencyStreamContainsOutdatedPrices(Deque<CurrencyPriceData> currencyPairStream, Instant cutoffTime) {
-        return !currencyPairStream.isEmpty() && currencyPairStream.peekLast().getTimestamp().isBefore(cutoffTime);
     }
 
     public Map<String, Double> getCurrencyPairToVWAP() {
@@ -112,12 +126,12 @@ public class VWAPCalculator {
 
     public void shutdown() {
         try {
-            scheduledExecutorService.shutdown();
-            if (!scheduledExecutorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                scheduledExecutorService.shutdownNow();
+            scheduledPriceRemovalExecutor.shutdown();
+            if (!scheduledPriceRemovalExecutor.awaitTermination(60, TimeUnit.SECONDS)) {
+                scheduledPriceRemovalExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {
-            scheduledExecutorService.shutdownNow();
+            scheduledPriceRemovalExecutor.shutdownNow();
             LOGGER.error("Error during shutdown: {}", e.getMessage());
         }
     }
