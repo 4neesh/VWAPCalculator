@@ -6,47 +6,64 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.DoubleAdder;
 
-import com.bank.util.DateTimeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static com.bank.vwap.VWAPConfig.CUTOFF_SECONDS;
-import static com.bank.vwap.VWAPConfig.TIMESTAMP_TIMEZONE;
 
 public class VWAPCalculator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VWAPCalculator.class);
-    private static ZoneId zoneId = ZoneId.of(TIMESTAMP_TIMEZONE);
+
+    private final BlockingQueue<CurrencyPriceData> priceUpdateQueue = new LinkedBlockingQueue<>();
 
     private final Map<String, Double> currencyPairToVWAP = new ConcurrentHashMap<>();
     private final Map<String, Deque<CurrencyPriceData>> currencyPairToPriceStream = new ConcurrentHashMap<>();
     private final Map<String, DoubleAdder> currencyPairToTotalWeightedPrice = new ConcurrentHashMap<>();
     private final Map<String, AtomicLong> currencyPairToTotalVolume = new ConcurrentHashMap<>();
+
     private final ScheduledExecutorService cleanupScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     public VWAPCalculator(){
         cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, 0, CUTOFF_SECONDS, TimeUnit.SECONDS);
+        startProcessingThread();
     }
 
-    public void processVWAPForCurrencyPair(String timestamp, String currencyPair, double price, long volume) {
-        try {
-            Instant timestampInstant = DateTimeUtil.convertToInstant(timestamp.toLowerCase(), zoneId);
-            CurrencyPriceData currencyPriceData = new CurrencyPriceData(timestampInstant, currencyPair, price, volume);
+    public void sendVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
+        priceUpdateQueue.offer(currencyPriceData);
+    }
 
+    private void startProcessingThread() {
+        executorService.submit(() -> {
+            while (true) {
+                try {
+                    CurrencyPriceData update = priceUpdateQueue.take(); // Blocks until an update is available
+                    processVWAPForCurrencyPair(update);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break; // Exit the loop if interrupted
+                }
+            }
+        });
+    }
+
+    public void processVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
+        try {
             Deque<CurrencyPriceData> currencyPairStream = currencyPairToPriceStream.computeIfAbsent(
-                currencyPair, k -> new ConcurrentLinkedDeque<>()
+                    currencyPriceData.getCurrencyPair(), k -> new ConcurrentLinkedDeque<>()
             );
             currencyPairStream.addFirst(currencyPriceData);
 
-            currencyPairToTotalWeightedPrice.computeIfAbsent(currencyPair, k -> new DoubleAdder())
-                .add(price * volume);
-            currencyPairToTotalVolume.computeIfAbsent(currencyPair, k -> new AtomicLong(0))
-                .addAndGet(volume);
+            currencyPairToTotalWeightedPrice.computeIfAbsent(currencyPriceData.getCurrencyPair(), k -> new DoubleAdder())
+                .add(currencyPriceData.getPrice() * currencyPriceData.getVolume());
+            currencyPairToTotalVolume.computeIfAbsent(currencyPriceData.getCurrencyPair(), k -> new AtomicLong(0))
+                .addAndGet(currencyPriceData.getVolume());
 
-            calculateVWAP(currencyPair, timestampInstant);
+            calculateVWAP(currencyPriceData.getCurrencyPair(), currencyPriceData.getTimestamp());
 
         } catch (Exception e) {
-            LOGGER.error("Error processing price update for {}: {}", currencyPair, e.getMessage());
+            LOGGER.error("Error processing price update for {}: {}", currencyPriceData.getCurrencyPair(), e.getMessage());
             // send email alert to propagate error to team with details of price entry
         }
     }
@@ -129,32 +146,6 @@ public class VWAPCalculator {
 
     public void shutdown(){
         this.cleanupScheduledExecutor.shutdown();
-    }
-}
-
-class CurrencyPriceData {
-    private Instant timestamp;
-    private String currencyPair;
-    private double price;
-    private long volume;
-
-    public CurrencyPriceData(Instant timestamp, String currencyPair, double price, long volume) {
-        this.timestamp = timestamp;
-        this.currencyPair = currencyPair;
-        this.price = price;
-        this.volume = volume;
-    }
-
-    public double getPrice() {
-        return price;
-    }
-
-    public long getVolume() {
-        return volume;
-    }
-
-    public Instant getTimestamp() {
-        return timestamp;
     }
 }
 

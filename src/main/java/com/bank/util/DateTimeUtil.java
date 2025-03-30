@@ -9,7 +9,7 @@ public class DateTimeUtil {
 
     public static Instant convertToInstant(String timeString, ZoneId zoneId) {
         try {
-            LocalTime localTime = LocalTime.parse(timeString, FORMATTER);
+            LocalTime localTime = LocalTime.parse(timeString.toLowerCase(), FORMATTER);
             LocalDate today = LocalDate.now(zoneId);
             return LocalDateTime.of(today, localTime).toInstant(ZoneOffset.UTC);
         } catch (DateTimeParseException e) {
