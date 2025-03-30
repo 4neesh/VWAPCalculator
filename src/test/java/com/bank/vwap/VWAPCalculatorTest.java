@@ -21,9 +21,9 @@ public class VWAPCalculatorTest {
 
     @Test
     public void testProcessPriceUpdate() {
-        calculator.processVWAPForCurrencyPair("9:30 AM","AUD/USD", 0.75, 1000);
-        calculator.processVWAPForCurrencyPair("9:31 AM","AUD/USD", 0.76, 2000);
-        calculator.processVWAPForCurrencyPair("9:32 AM","AUD/USD", 0.77, 3000);
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:30 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.75, 1000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:31 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.76, 2000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:32 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.77, 3000));
 
         //VWAP = sum of (volume * price) / sum of volume
         double expectedVWAP = (0.75 * 1000 + 0.76 * 2000 + 0.77 * 3000) / (1000 + 2000 + 3000);
@@ -32,12 +32,12 @@ public class VWAPCalculatorTest {
 
     @Test
     public void testMultipleCurrencyPairs() {
-        calculator.processVWAPForCurrencyPair("9:30 AM","AUD/USD", 0.75, 1000);
-        calculator.processVWAPForCurrencyPair("9:31 AM","USD/JPY", 110.0, 2000);
-        calculator.processVWAPForCurrencyPair("9:32 AM","AUD/USD", 0.76, 2000);
-        calculator.processVWAPForCurrencyPair("9:33 AM","USD/JPY", 111.0, 3000);
-        calculator.processVWAPForCurrencyPair("9:34 AM","NZD/GBP", 0.55, 1500);
-        calculator.processVWAPForCurrencyPair("9:35 AM","NZD/GBP", 0.56, 2500);
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:30 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.75, 1000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:31 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"USD/JPY", 110.0, 2000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:32 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.76, 2000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:33 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"USD/JPY", 111.0, 3000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:34 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"NZD/GBP", 0.55, 1500));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:35 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"NZD/GBP", 0.56, 2500));
 
         double expectedAUDVWAP = (0.75 * 1000 + 0.76 * 2000) / (1000 + 2000);
         double expectedUSDJPYVWAP = (110.0 * 2000 + 111.0 * 3000) / (2000 + 3000);
@@ -59,10 +59,12 @@ public class VWAPCalculatorTest {
         modifiersField.setInt(field, field.getModifiers() & ~java.lang.reflect.Modifier.FINAL);
         field.set(null, 1);
 
-        calculator.processVWAPForCurrencyPair("9:30 AM","AUD/USD", 0.75, 1000);
-        Thread.sleep(1200); //Sleep for 1.2 seconds to ensure old data is removed
-        calculator.processVWAPForCurrencyPair("9:31 AM","AUD/USD", 0.76, 2000);
-        calculator.processVWAPForCurrencyPair("9:31 AM","AUD/USD", 0.77, 3000);
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:30 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.75, 1000));
+
+        //Sleep for 1.2 seconds to ensure old data is removed
+        Thread.sleep(1200);
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:31 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.76, 2000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("9:31 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 0.77, 3000));
 
         double expectedVWAPAfterCutoff = (0.76 * 2000 + 0.77 * 3000) / (2000 + 3000);
         assertEquals(expectedVWAPAfterCutoff, calculator.getCurrencyPairToVWAP().get("AUD/USD"), 0.0001);
@@ -72,7 +74,7 @@ public class VWAPCalculatorTest {
     public void testRemovePricesOfExpiredCutoff() {
 
         String currencyPair = "EUR/USD";
-        calculator.processVWAPForCurrencyPair("1:00 AM", currencyPair, 1.7, 2000);
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData(DateTimeUtil.convertToInstant("1:00 AM", ZoneId.of(TIMESTAMP_TIMEZONE)),"AUD/USD", 1.7, 2000));
 
         //current time is more than 1 hour after the prior price was added
         Instant currentTime = DateTimeUtil.convertToInstant("9:00 am", ZoneId.of(TIMESTAMP_TIMEZONE));
