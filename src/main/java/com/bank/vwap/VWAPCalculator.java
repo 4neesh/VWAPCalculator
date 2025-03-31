@@ -1,5 +1,7 @@
 package com.bank.vwap;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -9,11 +11,11 @@ import java.util.concurrent.atomic.DoubleAdder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static com.bank.vwap.VWAPConfig.CUTOFF_SECONDS;
-
 public class VWAPCalculator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VWAPCalculator.class);
+    private static Integer CUTOFF_SECONDS;
+    private static String PRICE_TIMEZONE;
 
     private final BlockingQueue<CurrencyPriceData> priceUpdateQueue = new LinkedBlockingQueue<>();
 
@@ -28,6 +30,7 @@ public class VWAPCalculator {
     public VWAPCalculator(){
         cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, CUTOFF_SECONDS, CUTOFF_SECONDS, TimeUnit.SECONDS);
         startProcessingThread();
+        loadPropertiesFile();
     }
 
     public void sendVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
@@ -156,6 +159,17 @@ public class VWAPCalculator {
     public void shutdownExecutors(){
         this.priceFeedConsumerExecutorService.shutdown();
         this.cleanupScheduledExecutor.shutdown();
+    }
+
+    private static void loadPropertiesFile() {
+        Properties properties = new Properties();
+        try (FileInputStream input = new FileInputStream("src/main/resources/application.properties")) {
+            properties.load(input);
+            CUTOFF_SECONDS = Integer.parseInt(properties.getProperty("cutoff.seconds"));
+            PRICE_TIMEZONE = properties.getProperty("price.timezone");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }
 
