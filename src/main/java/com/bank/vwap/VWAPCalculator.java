@@ -28,7 +28,7 @@ public class VWAPCalculator {
     public VWAPCalculator(Integer cutoffSeconds){
         this.cutoffSeconds = cutoffSeconds;
         cleanupScheduledExecutor.scheduleWithFixedDelay(this::clearCutoffPricesForAllCurrencyPairs, this.cutoffSeconds, this.cutoffSeconds, TimeUnit.SECONDS);
-        startProcessingThread();
+        startConsumingPriceUpdates();
     }
 
     public void sendVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
@@ -145,11 +145,11 @@ public class VWAPCalculator {
         this.cleanupScheduledExecutor.shutdown();
     }
 
-    private void startProcessingThread() {
+    private void startConsumingPriceUpdates() {
         priceFeedConsumerExecutorService.submit(() -> {
             while (true) {
                 try {
-                    CurrencyPriceData update = priceUpdateQueue.take(); // Blocks until an update is available
+                    CurrencyPriceData update = priceUpdateQueue.take();
                     processVWAPForCurrencyPair(update);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
