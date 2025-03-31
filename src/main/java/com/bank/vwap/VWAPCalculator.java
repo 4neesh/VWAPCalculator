@@ -1,7 +1,5 @@
 package com.bank.vwap;
 
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -14,8 +12,8 @@ import org.slf4j.LoggerFactory;
 public class VWAPCalculator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VWAPCalculator.class);
-    public static Integer CUTOFF_SECONDS;
-    public static String PRICE_TIMEZONE;
+    private Integer cutoffSeconds;
+    public static String PRICE_TIMEZONE = "Australia/Sydney";
 
     private final BlockingQueue<CurrencyPriceData> priceUpdateQueue = new LinkedBlockingQueue<>();
 
@@ -27,10 +25,10 @@ public class VWAPCalculator {
     private final ScheduledExecutorService cleanupScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private final ExecutorService priceFeedConsumerExecutorService = Executors.newSingleThreadScheduledExecutor();
 
-    public VWAPCalculator(){
-        cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, CUTOFF_SECONDS, CUTOFF_SECONDS, TimeUnit.SECONDS);
+    public VWAPCalculator(Integer cutoffSeconds){
+        this.cutoffSeconds = cutoffSeconds;
+        cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, this.cutoffSeconds, this.cutoffSeconds, TimeUnit.SECONDS);
         startProcessingThread();
-        loadPropertiesFile();
     }
 
     public void sendVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
@@ -100,7 +98,7 @@ public class VWAPCalculator {
 
     protected void removePricesBeforeCutoff(String currencyPair, Instant timestamp) {
         try {
-            Instant cutoffTime = timestamp.minusSeconds(CUTOFF_SECONDS);
+            Instant cutoffTime = timestamp.minusSeconds(this.cutoffSeconds);
             Deque<CurrencyPriceData> priceStream = currencyPairToPriceStream.get(currencyPair);
             boolean pricesRemovedFromStream = false;
             Iterator<CurrencyPriceData> iterator = priceStream.descendingIterator();
@@ -159,17 +157,6 @@ public class VWAPCalculator {
     public void shutdownExecutors(){
         this.priceFeedConsumerExecutorService.shutdown();
         this.cleanupScheduledExecutor.shutdown();
-    }
-
-    private static void loadPropertiesFile() {
-        Properties properties = new Properties();
-        try (FileInputStream input = new FileInputStream("src/main/resources/application.properties")) {
-            properties.load(input);
-            CUTOFF_SECONDS = Integer.parseInt(properties.getProperty("cutoff.seconds"));
-            PRICE_TIMEZONE = properties.getProperty("price.timezone");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 }
 

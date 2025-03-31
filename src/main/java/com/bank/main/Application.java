@@ -3,8 +3,11 @@ package com.bank.main;
 import com.bank.vwap.CurrencyPriceData;
 import com.bank.vwap.VWAPCalculator;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,8 +19,15 @@ public class Application {
     private static final int DURATION_SECONDS = 10;
 
     public static void main(String[] args) {
+        Properties properties = new Properties();
+        try (FileInputStream input = new FileInputStream("src/main/resources/application.properties")) {
+            properties.load(input);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
         ExecutorService executor = Executors.newFixedThreadPool(3);
-        VWAPCalculator calculator = new VWAPCalculator();
+        VWAPCalculator calculator = new VWAPCalculator(Integer.parseInt(properties.getProperty("cutoff.seconds")));
 
         try {
             for (int i = 0; i < DURATION_SECONDS; i++) {

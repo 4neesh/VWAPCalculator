@@ -5,8 +5,6 @@ import com.bank.util.DateTimeUtil;
 import java.time.Instant;
 import java.time.ZoneId;
 
-import static com.bank.vwap.VWAPCalculator.PRICE_TIMEZONE;
-
 public class CurrencyPriceData {
     private Instant timestamp;
     private String currencyPair;
@@ -21,7 +19,7 @@ public class CurrencyPriceData {
     }
 
     public CurrencyPriceData(String timestamp, String currencyPair, double price, long volume) {
-        this.timestamp = DateTimeUtil.convertToInstant(timestamp.toLowerCase(), ZoneId.of(PRICE_TIMEZONE));
+        this.timestamp = DateTimeUtil.convertToInstant(timestamp.toLowerCase(), ZoneId.of("Australia/Sydney"));
         this.currencyPair = currencyPair;
         this.price = price;
         this.volume = volume;
