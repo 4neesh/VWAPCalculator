@@ -13,7 +13,7 @@ public class VWAPCalculator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VWAPCalculator.class);
     private Integer cutoffSeconds;
-    public static String PRICE_TIMEZONE = "Australia/Sydney";
+    protected static String PRICE_TIMEZONE = "Australia/Sydney";
 
     private final BlockingQueue<CurrencyPriceData> priceUpdateQueue = new LinkedBlockingQueue<>();
 
@@ -35,21 +35,7 @@ public class VWAPCalculator {
         priceUpdateQueue.offer(currencyPriceData);
     }
 
-    private void startProcessingThread() {
-        priceFeedConsumerExecutorService.submit(() -> {
-            while (true) {
-                try {
-                    CurrencyPriceData update = priceUpdateQueue.take(); // Blocks until an update is available
-                    processVWAPForCurrencyPair(update);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            }
-        });
-    }
-
-    public void processVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
+    protected void processVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
         try {
             Deque<CurrencyPriceData> currencyPairStream = currencyPairToPriceStream.computeIfAbsent(
                     currencyPriceData.getCurrencyPair(), k -> new ConcurrentLinkedDeque<>()
@@ -103,7 +89,7 @@ public class VWAPCalculator {
             boolean pricesRemovedFromStream = false;
             Iterator<CurrencyPriceData> iterator = priceStream.descendingIterator();
 
-            //Step 1 - remove old items from deque
+            //Step 1 - remove old items from deque and update volume and price maps
             while (iterator.hasNext()) {
                 CurrencyPriceData data = iterator.next();
                 if (data.getTimestamp().isBefore(cutoffTime)) {
@@ -118,7 +104,7 @@ public class VWAPCalculator {
                 }
             }
 
-            // Step 3 - Cleanup currency pairs without prices within cutoff time
+            // Step 2 - Cleanup currency pairs without prices within cutoff time
             if (pricesRemovedFromStream && currencyPairToTotalVolume.get(currencyPair).get() <= 0) {
                     currencyPairToVWAP.remove(currencyPair);
                     currencyPairToPriceStream.remove(currencyPair);
@@ -142,21 +128,35 @@ public class VWAPCalculator {
         return currencyPairToVWAP;
     }
 
-    public Map<String, Deque<CurrencyPriceData>> getCurrencyPairToPriceStream() {
+    protected Map<String, Deque<CurrencyPriceData>> getCurrencyPairToPriceStream() {
         return currencyPairToPriceStream;
     }
 
-    public Map<String, DoubleAdder> getCurrencyPairToTotalWeightedPrice() {
+    protected Map<String, DoubleAdder> getCurrencyPairToTotalWeightedPrice() {
         return currencyPairToTotalWeightedPrice;
     }
 
-    public Map<String, AtomicLong> getCurrencyPairToTotalVolume() {
+    protected Map<String, AtomicLong> getCurrencyPairToTotalVolume() {
         return currencyPairToTotalVolume;
     }
 
     public void shutdownExecutors(){
         this.priceFeedConsumerExecutorService.shutdown();
         this.cleanupScheduledExecutor.shutdown();
+    }
+
+    private void startProcessingThread() {
+        priceFeedConsumerExecutorService.submit(() -> {
+            while (true) {
+                try {
+                    CurrencyPriceData update = priceUpdateQueue.take(); // Blocks until an update is available
+                    processVWAPForCurrencyPair(update);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        });
     }
 }
 

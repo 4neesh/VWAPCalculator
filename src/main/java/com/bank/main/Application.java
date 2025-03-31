@@ -21,13 +21,9 @@ public class Application {
     public static void main(String[] args) {
         Properties properties = new Properties();
         try (InputStream input = Application.class.getClassLoader().getResourceAsStream("application.properties")) {
-            if (input == null) {
-                System.out.println("Unable to find application.properties");
-                return;
-            }
             properties.load(input);
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Unable to load properties file: " + e);
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(3);

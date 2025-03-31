@@ -18,7 +18,7 @@ public class VWAPCalculatorTest {
     private VWAPCalculator calculator;
 
     @Test
-    public void testProcessPriceUpdate() {
+    public void testCalculateVWAPForIdenticalCurrencyPairs() {
         calculator = new VWAPCalculator(3600);
 
         calculator.processVWAPForCurrencyPair(new CurrencyPriceData("9:30 AM","AUD/USD", 0.75, 1000));
@@ -31,7 +31,7 @@ public class VWAPCalculatorTest {
     }
 
     @Test
-    public void testMultipleCurrencyPairs() {
+    public void testCalculateVWAPForMultipleCurrencyPairs() {
         calculator = new VWAPCalculator(3600);
 
         calculator.processVWAPForCurrencyPair(new CurrencyPriceData("9:30 AM","AUD/USD", 0.75, 1000));
@@ -51,7 +51,7 @@ public class VWAPCalculatorTest {
     }
 
     @Test
-    public void testRecalculateVWAPAfterCutoffPerformed() throws InterruptedException {
+    public void testVWAPRecalculationAfterCutoffExpiration() throws InterruptedException {
         //reinitialise as spy to verify method calls and use new CUTOFF
         calculator = new VWAPCalculator(1);
         calculator = spy(calculator);
@@ -74,7 +74,7 @@ public class VWAPCalculatorTest {
     }
 
     @Test
-    public void testRemovePricesOfExpiredCutoff() {
+    public void testRemovePricesAfterCutoffExpiration() {
         calculator = new VWAPCalculator(3600);
 
         String currencyPair = "EUR/USD";
@@ -91,7 +91,7 @@ public class VWAPCalculatorTest {
     }
 
     @Test
-    public void scheduledCleanupRemovesUnusedCurrencyPairs() throws InterruptedException {
+    public void testCleanupRemovesExpiredCurrencyPairs() throws InterruptedException {
         //initialise calculator with 1 second cutoff
         calculator = new VWAPCalculator(1);
 
