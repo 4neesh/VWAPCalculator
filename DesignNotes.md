@@ -4,7 +4,7 @@
 - VWAP is recalculated using the past hour of prices each time a new price is reported for the currency pair
 
 ## Application Run
-- Running the Application class will generate 1000 price/volume combinations across 4 currency pairs (AUD/USD, USD/JPY & NZD/GBP) for 10 seconds into a BlockingQueue
+- Running the Application class will generate 1000 price/volume combinations across 3 currency pairs (AUD/USD, USD/JPY & NZD/GBP) for 10 seconds into a BlockingQueue
 - The VWAPCalculator class will listen and process the currency pair prices to generate a VWAP. The updated VWAP is reported to the console if run with the debug logging mode
 
 ## Developer Notes
@@ -43,3 +43,7 @@
 - Disruptor (LMAX) for LinkedBlockingQueue
 - Controlled end-to-end testing
 - Analysis with Java Flight Recorder/JProfiler
+
+### Testing
+- Performed on main logic class: VWAPCalculator
+- Uses JUnit and Mockito
