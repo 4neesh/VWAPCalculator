@@ -3,8 +3,8 @@ package com.bank.main;
 import com.bank.vwap.CurrencyPriceData;
 import com.bank.vwap.VWAPCalculator;
 
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
@@ -20,7 +20,11 @@ public class Application {
 
     public static void main(String[] args) {
         Properties properties = new Properties();
-        try (FileInputStream input = new FileInputStream("src/main/resources/application.properties")) {
+        try (InputStream input = Application.class.getClassLoader().getResourceAsStream("application.properties")) {
+            if (input == null) {
+                System.out.println("Unable to find application.properties");
+                return;
+            }
             properties.load(input);
         } catch (IOException e) {
             e.printStackTrace();
