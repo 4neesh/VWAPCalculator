@@ -19,22 +19,25 @@ public class Application {
         ExecutorService executor = Executors.newFixedThreadPool(3);
         VWAPCalculator calculator = new VWAPCalculator();
 
-        for (int i = 0; i < DURATION_SECONDS; i++) {
-            executor.submit(() -> {
-                for (int j = 0; j < PRICES_PER_SECOND; j++) {
-                    CurrencyPriceData priceData = generateRandomPriceData();
-                    calculator.sendVWAPForCurrencyPair(priceData);
+        try {
+            for (int i = 0; i < DURATION_SECONDS; i++) {
+                executor.submit(() -> {
+                    for (int j = 0; j < PRICES_PER_SECOND; j++) {
+                        CurrencyPriceData priceData = generateRandomPriceData();
+                        calculator.sendVWAPForCurrencyPair(priceData);
+                    }
+                });
+                try {
+                    Thread.sleep(1000); // Ensure 1000 updates per second
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
-            });
-            try {
-                Thread.sleep(1000); // Ensure 1000 updates per second
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
             }
         }
-
-        System.out.println("COMPLETE");
-        executor.shutdown();
+        finally {
+            calculator.shutdownExecutors();
+            executor.shutdown();
+        }
         System.exit(0);
     }
 
@@ -48,11 +51,11 @@ public class Application {
     private static double getRandomPrice(String currencyPair) {
         switch (currencyPair) {
             case "AUD/USD":
-                return 0.68 + (RANDOM.nextDouble() * 0.02);
+                return 0.63 + (RANDOM.nextDouble() * 0.02);
             case "USD/JPY":
-                return 138.0 + (RANDOM.nextDouble() * 5.0);
+                return 150.0 + (RANDOM.nextDouble() * 5.0);
             case "NZD/GBP":
-                return 0.47 + (RANDOM.nextDouble() * 0.01);
+                return 0.44 + (RANDOM.nextDouble() * 0.01);
             default:
                 return 1.0;
         }
