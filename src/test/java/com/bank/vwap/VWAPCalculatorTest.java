@@ -93,7 +93,7 @@ public class VWAPCalculatorTest {
     public void testRemovePricesOfExpiredCutoff() {
 
         String currencyPair = "EUR/USD";
-        calculator.processVWAPForCurrencyPair(new CurrencyPriceData("1:00 AM","AUD/USD", 1.7, 2000));
+        calculator.processVWAPForCurrencyPair(new CurrencyPriceData("1:00 AM",currencyPair, 1.7, 2000));
 
         //current time is more than 1 hour after the prior price was added
         Instant currentTime = DateTimeUtil.convertToInstant("9:00 am", ZoneId.of(TIMESTAMP_TIMEZONE));
