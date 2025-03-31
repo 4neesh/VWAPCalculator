@@ -29,11 +29,12 @@ Before you begin, ensure you have the following installed on your machine:
 
 2. **Run the Application**
 Execute the main class using the following command:
+
 [WITHOUT LOGGING]
    ```bash
    java -jar target/VWAPCalculator-1.0-SNAPSHOT.jar
    ```
-[WITH LOGGING]
+📝 [WITH LOGGING]
 
    ```bash
    java -Dorg.slf4j.simpleLogger.defaultLogLevel=debug -jar target/VWAPCalculator-1.0-SNAPSHOT.jar 
