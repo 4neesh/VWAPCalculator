@@ -27,7 +27,7 @@ public class VWAPCalculator {
 
     public VWAPCalculator(Integer cutoffSeconds){
         this.cutoffSeconds = cutoffSeconds;
-        cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, this.cutoffSeconds, this.cutoffSeconds, TimeUnit.SECONDS);
+        cleanupScheduledExecutor.scheduleWithFixedDelay(this::clearCutoffPricesForAllCurrencyPairs, this.cutoffSeconds, this.cutoffSeconds, TimeUnit.SECONDS);
         startProcessingThread();
     }
 
