@@ -23,10 +23,10 @@ public class VWAPCalculator {
     private final Map<String, AtomicLong> currencyPairToTotalVolume = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService cleanupScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
-    private final ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private final ExecutorService priceFeedConsumerExecutorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
     public VWAPCalculator(){
-        cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, 0, CUTOFF_SECONDS, TimeUnit.SECONDS);
+        cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, CUTOFF_SECONDS, CUTOFF_SECONDS, TimeUnit.SECONDS);
         startProcessingThread();
     }
 
@@ -35,14 +35,14 @@ public class VWAPCalculator {
     }
 
     private void startProcessingThread() {
-        executorService.submit(() -> {
+        priceFeedConsumerExecutorService.submit(() -> {
             while (true) {
                 try {
                     CurrencyPriceData update = priceUpdateQueue.take(); // Blocks until an update is available
                     processVWAPForCurrencyPair(update);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    break; // Exit the loop if interrupted
+                    break;
                 }
             }
         });
@@ -61,10 +61,23 @@ public class VWAPCalculator {
                 .addAndGet(currencyPriceData.getVolume());
 
             calculateVWAP(currencyPriceData.getCurrencyPair(), currencyPriceData.getTimestamp());
+            logProcessedResult(currencyPriceData);
 
         } catch (Exception e) {
             LOGGER.error("Error processing price update for {}: {}", currencyPriceData.getCurrencyPair(), e.getMessage());
             // send email alert to propagate error to team with details of price entry
+        }
+    }
+
+    private void logProcessedResult(CurrencyPriceData currencyPriceData) {
+        if (LOGGER.isDebugEnabled()) {
+            Double vwap = currencyPairToVWAP.get(currencyPriceData.getCurrencyPair());
+            LOGGER.debug("Price Data: [{}, {}, {}, {}] created VWAP of {}",
+                    currencyPriceData.getCurrencyPair(),
+                    currencyPriceData.getPrice(),
+                    currencyPriceData.getVolume(),
+                    currencyPriceData.getTimestamp(),
+                    vwap);
         }
     }
 
@@ -77,7 +90,6 @@ public class VWAPCalculator {
             if (totalVolume > 0) {
                 double vwap = totalWeightedPrice / totalVolume;
                 currencyPairToVWAP.put(currencyPair, vwap);
-                LOGGER.info("[" + timestamp + "] Updated " + currencyPair + " to VWAP of " + vwap);
             }
         } catch (Exception e) {
             LOGGER.error("Error calculating VWAP for {}: {}", currencyPair, e.getMessage());
@@ -117,7 +129,7 @@ public class VWAPCalculator {
 
         } catch (Exception e) {
             LOGGER.error("Error during price cleanup: {}", e.getMessage());
-            e.printStackTrace();
+            // send email alert to propagate error to team with details of price entry
         }
     }
 
@@ -144,7 +156,8 @@ public class VWAPCalculator {
         return currencyPairToTotalVolume;
     }
 
-    public void shutdown(){
+    public void shutdownExecutors(){
+        this.priceFeedConsumerExecutorService.shutdown();
         this.cleanupScheduledExecutor.shutdown();
     }
 }
