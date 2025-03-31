@@ -23,7 +23,7 @@ public class VWAPCalculator {
     private final Map<String, AtomicLong> currencyPairToTotalVolume = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService cleanupScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
-    private final ExecutorService priceFeedConsumerExecutorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private final ExecutorService priceFeedConsumerExecutorService = Executors.newSingleThreadScheduledExecutor();
 
     public VWAPCalculator(){
         cleanupScheduledExecutor.scheduleAtFixedRate(this::clearCutoffPricesForAllCurrencyPairs, CUTOFF_SECONDS, CUTOFF_SECONDS, TimeUnit.SECONDS);
