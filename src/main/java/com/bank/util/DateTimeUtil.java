@@ -18,7 +18,6 @@ public class DateTimeUtil {
             return LocalDateTime.of(today, localTime).toInstant(ZoneOffset.UTC);
         } catch (DateTimeParseException e) {
             LOGGER.error("Invalid time format: ", timeString);
-            // send email alert to propagate error to team with details of price entry
             return null;
         }
     }

@@ -65,7 +65,6 @@ public class VWAPCalculator {
 
         } catch (Exception e) {
             LOGGER.error("Error processing price update for {}: {}", currencyPriceData.getCurrencyPair(), e.getMessage());
-            // send email alert to propagate error to team with details of price entry
         }
     }
 
@@ -93,7 +92,6 @@ public class VWAPCalculator {
             }
         } catch (Exception e) {
             LOGGER.error("Error calculating VWAP for {}: {}", currencyPair, e.getMessage());
-            // send email alert to propagate error to team with details of price entry
         }
     }
 
@@ -129,7 +127,6 @@ public class VWAPCalculator {
 
         } catch (Exception e) {
             LOGGER.error("Error during price cleanup: {}", e.getMessage());
-            // send email alert to propagate error to team with details of price entry
         }
     }
 
