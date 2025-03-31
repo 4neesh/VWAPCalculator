@@ -14,8 +14,8 @@ import org.slf4j.LoggerFactory;
 public class VWAPCalculator {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(VWAPCalculator.class);
-    private static Integer CUTOFF_SECONDS;
-    private static String PRICE_TIMEZONE;
+    public static Integer CUTOFF_SECONDS;
+    public static String PRICE_TIMEZONE;
 
     private final BlockingQueue<CurrencyPriceData> priceUpdateQueue = new LinkedBlockingQueue<>();
 
