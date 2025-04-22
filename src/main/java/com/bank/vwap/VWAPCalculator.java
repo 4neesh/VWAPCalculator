@@ -3,8 +3,6 @@ package com.bank.vwap;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.DoubleAdder;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,12 +14,7 @@ public class VWAPCalculator {
     protected static String PRICE_TIMEZONE = "Australia/Sydney";
 
     private final BlockingQueue<CurrencyPriceData> priceUpdateQueue = new LinkedBlockingQueue<>();
-
-    private final Map<String, Double> currencyPairToVWAP = new ConcurrentHashMap<>();
-    private final Map<String, Deque<CurrencyPriceData>> currencyPairToPriceStream = new ConcurrentHashMap<>();
-    private final Map<String, DoubleAdder> currencyPairToTotalWeightedPrice = new ConcurrentHashMap<>();
-    private final Map<String, AtomicLong> currencyPairToTotalVolume = new ConcurrentHashMap<>();
-
+    private final Map<String, CurrencyData> currencyPairData = new ConcurrentHashMap<>();
     private final ScheduledExecutorService cleanupScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private final ExecutorService priceFeedConsumerExecutorService = Executors.newSingleThreadScheduledExecutor();
 
@@ -29,120 +22,6 @@ public class VWAPCalculator {
         this.cutoffSeconds = cutoffSeconds;
         cleanupScheduledExecutor.scheduleWithFixedDelay(this::clearCutoffPricesForAllCurrencyPairs, this.cutoffSeconds, this.cutoffSeconds, TimeUnit.SECONDS);
         startConsumingPriceUpdates();
-    }
-
-    public void sendVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
-        priceUpdateQueue.offer(currencyPriceData);
-    }
-
-    protected void processVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
-        try {
-            Deque<CurrencyPriceData> currencyPairStream = currencyPairToPriceStream.computeIfAbsent(
-                    currencyPriceData.getCurrencyPair(), k -> new ConcurrentLinkedDeque<>()
-            );
-            currencyPairStream.addFirst(currencyPriceData);
-
-            currencyPairToTotalWeightedPrice.computeIfAbsent(currencyPriceData.getCurrencyPair(), k -> new DoubleAdder())
-                .add(currencyPriceData.getPrice() * currencyPriceData.getVolume());
-            currencyPairToTotalVolume.computeIfAbsent(currencyPriceData.getCurrencyPair(), k -> new AtomicLong(0))
-                .addAndGet(currencyPriceData.getVolume());
-
-            calculateVWAP(currencyPriceData.getCurrencyPair(), currencyPriceData.getTimestamp());
-            logProcessedResult(currencyPriceData);
-
-        } catch (Exception e) {
-            LOGGER.error("Error processing price update for {}: {}", currencyPriceData.getCurrencyPair(), e.getMessage());
-        }
-    }
-
-    private void logProcessedResult(CurrencyPriceData currencyPriceData) {
-        if (LOGGER.isDebugEnabled()) {
-            Double vwap = currencyPairToVWAP.get(currencyPriceData.getCurrencyPair());
-            LOGGER.debug("Price Data: [{}, {}, {}, {}] created VWAP of {}",
-                    currencyPriceData.getCurrencyPair(),
-                    currencyPriceData.getPrice(),
-                    currencyPriceData.getVolume(),
-                    currencyPriceData.getTimestamp(),
-                    vwap);
-        }
-    }
-
-    private void calculateVWAP(String currencyPair, Instant timestamp) {
-        try {
-            removePricesBeforeCutoff(currencyPair, timestamp);
-            double totalWeightedPrice = currencyPairToTotalWeightedPrice.get(currencyPair).sum();
-            long totalVolume = currencyPairToTotalVolume.get(currencyPair).get();
-            
-            if (totalVolume > 0) {
-                double vwap = totalWeightedPrice / totalVolume;
-                currencyPairToVWAP.put(currencyPair, vwap);
-            }
-        } catch (Exception e) {
-            LOGGER.error("Error calculating VWAP for {}: {}", currencyPair, e.getMessage());
-        }
-    }
-
-    protected void removePricesBeforeCutoff(String currencyPair, Instant timestamp) {
-        try {
-            Instant cutoffTime = timestamp.minusSeconds(this.cutoffSeconds);
-            Deque<CurrencyPriceData> priceStream = currencyPairToPriceStream.get(currencyPair);
-            boolean pricesRemovedFromStream = false;
-            Iterator<CurrencyPriceData> iterator = priceStream.descendingIterator();
-
-            //Step 1 - remove old items from deque and update volume and price maps
-            while (iterator.hasNext()) {
-                CurrencyPriceData data = iterator.next();
-                if (data.getTimestamp().isBefore(cutoffTime)) {
-                    pricesRemovedFromStream = true;
-                    priceStream.remove(data);
-                    currencyPairToTotalWeightedPrice.get(currencyPair)
-                            .add(-data.getPrice() * data.getVolume());
-                    currencyPairToTotalVolume.get(currencyPair)
-                            .addAndGet(-data.getVolume());
-                } else {
-                    break;
-                }
-            }
-
-            // Step 2 - Cleanup currency pairs without prices within cutoff time
-            if (pricesRemovedFromStream && currencyPairToTotalVolume.get(currencyPair).get() <= 0) {
-                    currencyPairToVWAP.remove(currencyPair);
-                    currencyPairToPriceStream.remove(currencyPair);
-                    currencyPairToTotalWeightedPrice.remove(currencyPair);
-                    currencyPairToTotalVolume.remove(currencyPair);
-            }
-
-        } catch (Exception e) {
-            LOGGER.error("Error during price cleanup: {}", e.getMessage());
-        }
-    }
-
-    protected void clearCutoffPricesForAllCurrencyPairs(){
-        Instant currentTime = Instant.now();
-        for(String currencyPair: currencyPairToPriceStream.keySet()){
-            this.removePricesBeforeCutoff(currencyPair, currentTime);
-        }
-    }
-
-    protected Map<String, Double> getCurrencyPairToVWAP() {
-        return currencyPairToVWAP;
-    }
-
-    protected Map<String, Deque<CurrencyPriceData>> getCurrencyPairToPriceStream() {
-        return currencyPairToPriceStream;
-    }
-
-    protected Map<String, DoubleAdder> getCurrencyPairToTotalWeightedPrice() {
-        return currencyPairToTotalWeightedPrice;
-    }
-
-    protected Map<String, AtomicLong> getCurrencyPairToTotalVolume() {
-        return currencyPairToTotalVolume;
-    }
-
-    public void shutdownExecutors(){
-        this.priceFeedConsumerExecutorService.shutdown();
-        this.cleanupScheduledExecutor.shutdown();
     }
 
     private void startConsumingPriceUpdates() {
@@ -157,6 +36,109 @@ public class VWAPCalculator {
                 }
             }
         });
+    }
+
+    public void sendVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
+        priceUpdateQueue.offer(currencyPriceData);
+    }
+
+    protected void processVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
+        try {
+            CurrencyData data = currencyPairData.computeIfAbsent(
+                    currencyPriceData.getCurrencyPair(), k -> new CurrencyData()
+            );
+            
+            data.getPriceStream().addFirst(currencyPriceData);
+            data.getTotalWeightedPrice().add(currencyPriceData.getPrice() * currencyPriceData.getVolume());
+            data.getTotalVolume().addAndGet(currencyPriceData.getVolume());
+
+            calculateVWAP(currencyPriceData.getCurrencyPair(), currencyPriceData.getTimestamp());
+            logProcessedResult(currencyPriceData);
+
+        } catch (Exception e) {
+            LOGGER.error("Error processing price update for {}: {}", currencyPriceData.getCurrencyPair(), e.getMessage());
+        }
+    }
+
+    private void calculateVWAP(String currencyPair, Instant timestamp) {
+        try {
+            removePricesBeforeCutoff(currencyPair, timestamp);
+            CurrencyData data = currencyPairData.get(currencyPair);
+            if (data != null) {
+                double totalWeightedPrice = data.getTotalWeightedPrice().sum();
+                long totalVolume = data.getTotalVolume().get();
+                
+                if (totalVolume > 0) {
+                    double vwap = totalWeightedPrice / totalVolume;
+                    data.setVwap(vwap);
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error calculating VWAP for {}: {}", currencyPair, e.getMessage());
+        }
+    }
+
+    protected void removePricesBeforeCutoff(String currencyPair, Instant timestamp) {
+        try {
+            CurrencyData data = currencyPairData.get(currencyPair);
+            if (data == null) {
+                return;
+            }
+            
+            Instant cutoffTime = timestamp.minusSeconds(this.cutoffSeconds);
+            Deque<CurrencyPriceData> priceStream = data.getPriceStream();
+            boolean pricesRemovedFromStream = false;
+            Iterator<CurrencyPriceData> iterator = priceStream.descendingIterator();
+
+            // Remove old items from deque and update volume and price
+            while (iterator.hasNext()) {
+                CurrencyPriceData priceData = iterator.next();
+                if (priceData.getTimestamp().isBefore(cutoffTime)) {
+                    pricesRemovedFromStream = true;
+                    priceStream.remove(priceData);
+                    data.getTotalWeightedPrice().add(-priceData.getPrice() * priceData.getVolume());
+                    data.getTotalVolume().addAndGet(-priceData.getVolume());
+                } else {
+                    break;
+                }
+            }
+
+            // Cleanup currency pairs without prices within cutoff time
+            if (pricesRemovedFromStream && data.getTotalVolume().get() <= 0) {
+                currencyPairData.remove(currencyPair);
+            }
+
+        } catch (Exception e) {
+            LOGGER.error("Error during price cleanup: {}", e.getMessage());
+        }
+    }
+
+    protected void clearCutoffPricesForAllCurrencyPairs(){
+        Instant currentTime = Instant.now();
+        for(String currencyPair: new HashSet<>(currencyPairData.keySet())){
+            this.removePricesBeforeCutoff(currencyPair, currentTime);
+        }
+    }
+
+    public void shutdownExecutors(){
+        this.priceFeedConsumerExecutorService.shutdown();
+        this.cleanupScheduledExecutor.shutdown();
+    }
+
+    public Map<String, CurrencyData> getCurrencyPairData() {
+        return currencyPairData;
+    }
+
+    private void logProcessedResult(CurrencyPriceData currencyPriceData) {
+        if (LOGGER.isDebugEnabled()) {
+            Double vwap = currencyPairData.get(currencyPriceData.getCurrencyPair()).getVwap();
+            LOGGER.debug("Price Data: [{}, {}, {}, {}] created VWAP of {}",
+                    currencyPriceData.getCurrencyPair(),
+                    currencyPriceData.getPrice(),
+                    currencyPriceData.getVolume(),
+                    currencyPriceData.getTimestamp(),
+                    vwap);
+        }
     }
 }
 

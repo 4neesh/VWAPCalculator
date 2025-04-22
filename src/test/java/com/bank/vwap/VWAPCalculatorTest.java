@@ -27,7 +27,7 @@ public class VWAPCalculatorTest {
 
         //VWAP = sum of (volume * price) / sum of volume
         double expectedVWAP = (0.75 * 1000 + 0.76 * 2000 + 0.77 * 3000) / (1000 + 2000 + 3000);
-        assertEquals(expectedVWAP, calculator.getCurrencyPairToVWAP().get("AUD/USD"), 0.0001);
+        assertEquals(expectedVWAP, calculator.getCurrencyPairData().get("AUD/USD").getVwap(), 0.0001);
     }
 
     @Test
@@ -45,9 +45,9 @@ public class VWAPCalculatorTest {
         double expectedUSDJPYVWAP = (110.0 * 2000 + 111.0 * 3000) / (2000 + 3000);
         double expectedNZDGBPVWAP = (0.55 * 1500 + 0.56 * 2500) / (1500 + 2500);
 
-        assertEquals(expectedAUDVWAP, calculator.getCurrencyPairToVWAP().get("AUD/USD"), 0.0001);
-        assertEquals(expectedUSDJPYVWAP, calculator.getCurrencyPairToVWAP().get("USD/JPY"), 0.0001);
-        assertEquals(expectedNZDGBPVWAP, calculator.getCurrencyPairToVWAP().get("NZD/GBP"), 0.0001);
+        assertEquals(expectedAUDVWAP, calculator.getCurrencyPairData().get("AUD/USD").getVwap(), 0.0001);
+        assertEquals(expectedUSDJPYVWAP, calculator.getCurrencyPairData().get("USD/JPY").getVwap(), 0.0001);
+        assertEquals(expectedNZDGBPVWAP, calculator.getCurrencyPairData().get("NZD/GBP").getVwap(), 0.0001);
     }
 
     @Test
@@ -67,7 +67,7 @@ public class VWAPCalculatorTest {
         calculator.processVWAPForCurrencyPair(new CurrencyPriceData("9:31 AM", "AUD/USD", 0.77, 3000));
 
         double expectedVWAPAfterCutoff = (0.76 * 2000 + 0.77 * 3000) / (2000 + 3000);
-        assertEquals(expectedVWAPAfterCutoff, calculator.getCurrencyPairToVWAP().get("AUD/USD"), 0.0001);
+        assertEquals(expectedVWAPAfterCutoff, calculator.getCurrencyPairData().get("AUD/USD").getVwap(), 0.0001);
 
         //verify cutoff not performed by scheduled executor
         Mockito.verify(calculator, never()).clearCutoffPricesForAllCurrencyPairs();
@@ -84,11 +84,8 @@ public class VWAPCalculatorTest {
         Instant currentTime = DateTimeUtil.convertToInstant("9:00 am", ZoneId.of(PRICE_TIMEZONE));
         calculator.removePricesBeforeCutoff(currencyPair, currentTime);
 
-        assertFalse(calculator.getCurrencyPairToVWAP().containsKey(currencyPair));
-        assertFalse(calculator.getCurrencyPairToPriceStream().containsKey(currencyPair));
-        assertFalse(calculator.getCurrencyPairToTotalVolume().containsKey(currencyPair));
-        assertFalse(calculator.getCurrencyPairToTotalWeightedPrice().containsKey(currencyPair));
-    }
+        assertFalse(calculator.getCurrencyPairData().containsKey(currencyPair));
+     }
 
     @Test
     public void testCleanupRemovesExpiredCurrencyPairs() throws InterruptedException {
@@ -97,12 +94,12 @@ public class VWAPCalculatorTest {
 
         calculator.processVWAPForCurrencyPair(new CurrencyPriceData(Instant.now(), "AUD/USD", 1.7, 2000));
         calculator.processVWAPForCurrencyPair(new CurrencyPriceData(Instant.now(), "NZD/GBP", 0.7, 1400));
-        assertTrue(calculator.getCurrencyPairToVWAP().containsKey("AUD/USD"));
-        assertTrue(calculator.getCurrencyPairToVWAP().containsKey("NZD/GBP"));
+        assertTrue(calculator.getCurrencyPairData().containsKey("AUD/USD"));
+        assertTrue(calculator.getCurrencyPairData().containsKey("NZD/GBP"));
 
         //sleep thread for 2 seconds to allow scheduled cleanup to take place
         Thread.sleep(2000);
 
-        assertTrue(calculator.getCurrencyPairToVWAP().isEmpty());
+        assertTrue(calculator.getCurrencyPairData().isEmpty());
     }
 }
