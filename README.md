@@ -9,13 +9,7 @@ Before you begin, ensure you have the following installed on your machine:
 
 ## Setting Up the Environment
 
-1. **Clone the Repository**
-   Clone the repository to your local machine using Git:
-   ```bash
-   git clone https://github.com/4neesh/VWAPCalculator.git
-   ```
-
-2. **Install Dependencies**
+1**Install Dependencies**
    Change into the project directory and install the project with maven:
    ```bash
    cd VWAPCalculator
@@ -42,6 +36,3 @@ Execute the main class using the following command:
 
 3. **Observe Output**
    When run with debug logging, the application will process a series of price updates and print the updated VWAP values for each currency pair to the console along with its most recent price update.
-
-## Application Design
-- see DesignNotes.md 

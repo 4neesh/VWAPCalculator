@@ -78,27 +78,38 @@ public class VWAPCalculator {
         }
     }
 
+
     protected void removePricesBeforeCutoff(String currencyPair, Instant timestamp) {
+        if (currencyPair == null || timestamp == null) {
+            LOGGER.warn("Cannot remove prices with null currencyPair or timestamp");
+            return;
+        }
+
         try {
             CurrencyData data = currencyPairData.get(currencyPair);
             if (data == null) {
                 return;
             }
-            
+
             Instant cutoffTime = timestamp.minusSeconds(this.cutoffSeconds);
             Deque<CurrencyPriceData> priceStream = data.getPriceStream();
             boolean pricesRemovedFromStream = false;
-            Iterator<CurrencyPriceData> iterator = priceStream.descendingIterator();
 
-            // Remove old items from deque and update volume and price
+            // Use iterator.remove() to safely remove elements during iteration
+            Iterator<CurrencyPriceData> iterator = priceStream.descendingIterator();
             while (iterator.hasNext()) {
                 CurrencyPriceData priceData = iterator.next();
                 if (priceData.getTimestamp().isBefore(cutoffTime)) {
-                    pricesRemovedFromStream = true;
-                    priceStream.remove(priceData);
-                    data.getTotalWeightedPrice().add(-priceData.getPrice() * priceData.getVolume());
+                    // Subtract the price contribution before removing
+                    double weightedPrice = priceData.getPrice() * priceData.getVolume();
+                    data.getTotalWeightedPrice().add(-weightedPrice);
                     data.getTotalVolume().addAndGet(-priceData.getVolume());
+
+                    // Use iterator's remove method instead of collection's remove
+                    iterator.remove();
+                    pricesRemovedFromStream = true;
                 } else {
+                    // Since data is time-ordered, we can stop once we find data within cutoff
                     break;
                 }
             }
@@ -106,10 +117,10 @@ public class VWAPCalculator {
             // Cleanup currency pairs without prices within cutoff time
             if (pricesRemovedFromStream && data.getTotalVolume().get() <= 0) {
                 currencyPairData.remove(currencyPair);
+                LOGGER.debug("Removed currency pair {} as it has no recent price data", currencyPair);
             }
-
         } catch (Exception e) {
-            LOGGER.error("Error during price cleanup: {}", e.getMessage());
+            LOGGER.error("Error during price cleanup for {}: {}", currencyPair, e.getMessage(), e);
         }
     }
 
