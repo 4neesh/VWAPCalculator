@@ -45,6 +45,13 @@ public class Application {
             }
         }
         finally {
+            // Add a small delay to ensure all processing is complete
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
             calculator.shutdownExecutors();
             executor.shutdown();
         }
