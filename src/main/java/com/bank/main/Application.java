@@ -1,5 +1,6 @@
 package com.bank.main;
 
+import com.bank.vwap.CurrencyData;
 import com.bank.vwap.CurrencyPriceData;
 import com.bank.vwap.VWAPCalculator;
 
@@ -43,8 +44,27 @@ public class Application {
                     Thread.currentThread().interrupt();
                 }
             }
-        }
-        finally {
+        } finally {
+            // Log summary statistics for each currency pair
+            System.out.println("\nSummary Statistics for Currency Pairs:");
+            for (String currencyPair : CURRENCY_PAIRS) {
+                CurrencyData data = calculator.getCurrencyPairData().get(currencyPair);
+                if (data != null && !data.isEmpty()) {
+                    double high = Double.MIN_VALUE;
+                    double low = Double.MAX_VALUE;
+                    for (CurrencyPriceData priceData : data.getPriceStream()) {
+                        double price = priceData.getPrice();
+                        high = Math.max(high, price);
+                        low = Math.min(low, price);
+                    }
+                    double vwap = data.getVwap();
+                    System.out.printf("Currency Pair: %s, High: %.4f, Low: %.4f, VWAP: %.4f%n",
+                            currencyPair, high, low, vwap);
+                } else {
+                    System.out.printf("Currency Pair: %s, No data available%n", currencyPair);
+                }
+            }
+
             calculator.shutdownExecutors();
             executor.shutdown();
         }

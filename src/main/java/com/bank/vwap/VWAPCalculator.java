@@ -45,16 +45,19 @@ public class VWAPCalculator {
     protected void processVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
         try {
             CurrencyData data = currencyPairData.computeIfAbsent(
-                    currencyPriceData.getCurrencyPair(), k -> new CurrencyData()
+                    currencyPriceData.getCurrencyPair(), k -> {
+                        CurrencyData newData = new CurrencyData();
+                        LOGGER.info("New currency pair added: {}", currencyPriceData.getCurrencyPair());
+                        return newData;
+                    }
             );
-            
+
             data.getPriceStream().addFirst(currencyPriceData);
             data.getTotalWeightedPrice().add(currencyPriceData.getPrice() * currencyPriceData.getVolume());
             data.getTotalVolume().addAndGet(currencyPriceData.getVolume());
 
             calculateVWAP(currencyPriceData.getCurrencyPair(), currencyPriceData.getTimestamp());
-            logProcessedResult(currencyPriceData);
-
+            // Removed debug logging for each price update
         } catch (Exception e) {
             LOGGER.error("Error processing price update for {}: {}", currencyPriceData.getCurrencyPair(), e.getMessage());
         }
@@ -140,16 +143,5 @@ public class VWAPCalculator {
         return currencyPairData;
     }
 
-    private void logProcessedResult(CurrencyPriceData currencyPriceData) {
-        if (LOGGER.isDebugEnabled()) {
-            Double vwap = currencyPairData.get(currencyPriceData.getCurrencyPair()).getVwap();
-            LOGGER.debug("Price Data: [{}, {}, {}, {}] created VWAP of {}",
-                    currencyPriceData.getCurrencyPair(),
-                    currencyPriceData.getPrice(),
-                    currencyPriceData.getVolume(),
-                    currencyPriceData.getTimestamp(),
-                    vwap);
-        }
-    }
 }
 
