@@ -1,6 +1,5 @@
 package com.bank.main;
 
-import com.bank.vwap.CurrencyData;
 import com.bank.vwap.CurrencyPriceData;
 import com.bank.vwap.VWAPCalculator;
 
