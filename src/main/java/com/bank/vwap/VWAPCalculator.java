@@ -4,6 +4,7 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.bank.util.PriceStatistics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -152,10 +153,6 @@ public class VWAPCalculator {
         return currencyPairData;
     }
 
-    private void logProcessedResult(CurrencyPriceData currencyPriceData) {
-        // Removed detailed logging for each price update
-    }
-
     public void shutdownExecutors(){
         // Log summary statistics before shutdown
         logSummaryStatistics();
@@ -169,50 +166,16 @@ public class VWAPCalculator {
      */
     private void logSummaryStatistics() {
         LOGGER.info("=== Currency Pair Summary Statistics ===");
-        for (Map.Entry<String, PriceStatistics> entry : currencyPairStats.entrySet()) {
-            String currencyPair = entry.getKey();
-            PriceStatistics stats = entry.getValue();
+        currencyPairStats.keySet().stream().sorted().forEach(currencyPair -> {
+            PriceStatistics stats = currencyPairStats.get(currencyPair);
 
             LOGGER.info("{}: High: {}, Low: {}, Average: {}",
                     currencyPair,
                     String.format("%.6f", stats.getHighPrice()),
                     String.format("%.6f", stats.getLowPrice()),
                     String.format("%.6f", stats.getAveragePrice()));
-        }
+        });
         LOGGER.info("======================================");
-    }
-
-    /**
-     * Inner class to track price statistics for a currency pair
-     */
-    private static class PriceStatistics {
-        private double highPrice = Double.MIN_VALUE;
-        private double lowPrice = Double.MAX_VALUE;
-        private double totalPrice = 0;
-        private long count = 0;
-
-        public synchronized void updateStatistics(double price) {
-            if (price > highPrice) {
-                highPrice = price;
-            }
-            if (price < lowPrice) {
-                lowPrice = price;
-            }
-            totalPrice += price;
-            count++;
-        }
-
-        public double getHighPrice() {
-            return highPrice;
-        }
-
-        public double getLowPrice() {
-            return lowPrice;
-        }
-
-        public double getAveragePrice() {
-            return count > 0 ? totalPrice / count : 0;
-        }
     }
 }
 
