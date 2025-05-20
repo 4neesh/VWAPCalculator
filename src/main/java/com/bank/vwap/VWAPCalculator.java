@@ -124,7 +124,7 @@ public class VWAPCalculator {
                     data.getTotalVolume().addAndGet(-priceData.getVolume());
 
                     // Use iterator's remove method instead of collection's remove
-                    iterator.remove();
+                    data.removeItemsBeforeCutoff(cutoffTime);
                     pricesRemovedFromStream = true;
                 } else {
                     // Since data is time-ordered, we can stop once we find data within cutoff
