@@ -4,6 +4,7 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import com.bank.util.PriceStatistics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,6 +18,9 @@ public class VWAPCalculator {
     private final Map<String, CurrencyData> currencyPairData = new ConcurrentHashMap<>();
     private final ScheduledExecutorService cleanupScheduledExecutor = Executors.newSingleThreadScheduledExecutor();
     private final ExecutorService priceFeedConsumerExecutorService = Executors.newSingleThreadScheduledExecutor();
+
+    // Track statistics for each currency pair
+    private final Map<String, PriceStatistics> currencyPairStats = new ConcurrentHashMap<>();
 
     public VWAPCalculator(Integer cutoffSeconds){
         this.cutoffSeconds = cutoffSeconds;
@@ -44,16 +48,30 @@ public class VWAPCalculator {
 
     protected void processVWAPForCurrencyPair(CurrencyPriceData currencyPriceData) {
         try {
+            String currencyPair = currencyPriceData.getCurrencyPair();
+            double price = currencyPriceData.getPrice();
+
+            // Check if this is a new currency pair
+            boolean isNewCurrencyPair = !currencyPairData.containsKey(currencyPair);
+
             CurrencyData data = currencyPairData.computeIfAbsent(
-                    currencyPriceData.getCurrencyPair(), k -> new CurrencyData()
+                    currencyPair, k -> new CurrencyData()
             );
-            
+
+            // Update statistics
+            currencyPairStats.computeIfAbsent(currencyPair, k -> new PriceStatistics())
+                    .updateStatistics(price);
+
             data.getPriceStream().addFirst(currencyPriceData);
             data.getTotalWeightedPrice().add(currencyPriceData.getPrice() * currencyPriceData.getVolume());
             data.getTotalVolume().addAndGet(currencyPriceData.getVolume());
 
-            calculateVWAP(currencyPriceData.getCurrencyPair(), currencyPriceData.getTimestamp());
-            logProcessedResult(currencyPriceData);
+            calculateVWAP(currencyPair, currencyPriceData.getTimestamp());
+
+            // Only log when a new currency pair is added
+            if (isNewCurrencyPair) {
+                LOGGER.info("New currency pair added: {}", currencyPair);
+            }
 
         } catch (Exception e) {
             LOGGER.error("Error processing price update for {}: {}", currencyPriceData.getCurrencyPair(), e.getMessage());
@@ -131,25 +149,33 @@ public class VWAPCalculator {
         }
     }
 
-    public void shutdownExecutors(){
-        this.priceFeedConsumerExecutorService.shutdown();
-        this.cleanupScheduledExecutor.shutdown();
-    }
-
     public Map<String, CurrencyData> getCurrencyPairData() {
         return currencyPairData;
     }
 
-    private void logProcessedResult(CurrencyPriceData currencyPriceData) {
-        if (LOGGER.isDebugEnabled()) {
-            Double vwap = currencyPairData.get(currencyPriceData.getCurrencyPair()).getVwap();
-            LOGGER.debug("Price Data: [{}, {}, {}, {}] created VWAP of {}",
-                    currencyPriceData.getCurrencyPair(),
-                    currencyPriceData.getPrice(),
-                    currencyPriceData.getVolume(),
-                    currencyPriceData.getTimestamp(),
-                    vwap);
-        }
+    public void shutdownExecutors(){
+        // Log summary statistics before shutdown
+        logSummaryStatistics();
+
+        this.priceFeedConsumerExecutorService.shutdown();
+        this.cleanupScheduledExecutor.shutdown();
+    }
+
+    /**
+     * Logs summary statistics for all currency pairs
+     */
+    private void logSummaryStatistics() {
+        LOGGER.info("=== Currency Pair Summary Statistics ===");
+        currencyPairStats.keySet().stream().sorted().forEach(currencyPair -> {
+            PriceStatistics stats = currencyPairStats.get(currencyPair);
+
+            LOGGER.info("{}: High: {}, Low: {}, Average: {}",
+                    currencyPair,
+                    String.format("%.6f", stats.getHighPrice()),
+                    String.format("%.6f", stats.getLowPrice()),
+                    String.format("%.6f", stats.getAveragePrice()));
+        });
+        LOGGER.info("======================================");
     }
 }
 
