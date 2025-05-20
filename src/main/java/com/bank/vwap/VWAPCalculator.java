@@ -62,7 +62,7 @@ public class VWAPCalculator {
             currencyPairStats.computeIfAbsent(currencyPair, k -> new PriceStatistics())
                     .updateStatistics(price);
 
-            data.getPriceStream().addFirst(currencyPriceData);
+            data.addToFront(currencyPriceData);
             data.getTotalWeightedPrice().add(currencyPriceData.getPrice() * currencyPriceData.getVolume());
             data.getTotalVolume().addAndGet(currencyPriceData.getVolume());
 
