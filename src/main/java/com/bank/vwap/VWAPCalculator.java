@@ -85,7 +85,7 @@ public class VWAPCalculator {
             if (data != null) {
                 double totalWeightedPrice = data.getTotalWeightedPrice().sum();
                 long totalVolume = data.getTotalVolume().get();
-                
+
                 if (totalVolume > 0) {
                     double vwap = totalWeightedPrice / totalVolume;
                     data.setVwap(vwap);
