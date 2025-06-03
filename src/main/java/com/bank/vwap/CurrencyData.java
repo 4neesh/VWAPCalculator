@@ -14,9 +14,10 @@ public class CurrencyData {
     
     // Frequently accessed calculation fields
     private volatile double vwap;
-    private final DoubleAdder totalWeightedPrice;
-    private final AtomicLong totalVolume;
-    
+    private double totalWeightedPrice;
+    private long totalVolume;
+
+
     // Collection and synchronization
     private final Deque<CurrencyPriceData> priceStream;
     private final ReadWriteLock lock;
@@ -30,8 +31,8 @@ public class CurrencyData {
     public CurrencyData() {
         // Use ArrayDeque for better memory locality and cache performance
         this.priceStream = new ArrayDeque<>(INITIAL_CAPACITY);
-        this.totalWeightedPrice = new DoubleAdder();
-        this.totalVolume = new AtomicLong(0);
+        this.totalWeightedPrice = 0;
+        this.totalVolume = 0;
         this.vwap = 0.0;
         this.lock = new ReentrantReadWriteLock();
     }
@@ -135,14 +136,22 @@ public class CurrencyData {
         }
     }
 
-    public DoubleAdder getTotalWeightedPrice() {
+    public double getTotalWeightedPrice() {
         return totalWeightedPrice;
     }
 
-    public AtomicLong getTotalVolume() {
+    public long getTotalVolume() {
         return totalVolume;
     }
-    
+
+    public void setTotalWeightedPrice(double totalWeightedPrice) {
+        this.totalWeightedPrice = totalWeightedPrice;
+    }
+
+    public void setTotalVolume(long totalVolume) {
+        this.totalVolume = totalVolume;
+    }
+
     // Cache line padding to prevent false sharing
     private long q1, q2, q3, q4, q5, q6, q7;
 }
