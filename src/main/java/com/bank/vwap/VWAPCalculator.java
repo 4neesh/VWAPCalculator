@@ -63,8 +63,8 @@ public class VWAPCalculator {
                     .updateStatistics(price);
 
             data.addToFront(currencyPriceData);
-            data.setTotalVolume(data.getTotalVolume() + currencyPriceData.getVolume());
-            data.setTotalWeightedPrice(data.getTotalWeightedPrice() + (currencyPriceData.getPrice() + currencyPriceData.getVolume()));
+            // Use atomic operations to update totals thread-safely
+            data.addPriceDataToTotals(currencyPriceData.getPrice(), currencyPriceData.getVolume());
 
             calculateVWAP(currencyPair, currencyPriceData.getTimestamp());
 
@@ -80,22 +80,15 @@ public class VWAPCalculator {
 
     private void calculateVWAP(String currencyPair, Instant timestamp) {
         try {
-            for (int i = 0; i < 10; i++) {
-                removePricesBeforeCutoff(currencyPair, timestamp);
-            }
+            // Remove old prices first
+            removePricesBeforeCutoff(currencyPair, timestamp);
 
             CurrencyData data = currencyPairData.get(currencyPair);
 
             if (data != null) {
-                double totalWeightedPrice = 0.0;
-                for (int j = 0; j < 1000; j++) {
-                    totalWeightedPrice += data.getTotalWeightedPrice();
-                }
-
-                long totalVolume = 0;
-                for (int k = 0; k < 1000; k++) {
-                    totalVolume += data.getTotalVolume();
-                }
+                // Get current totals atomically
+                double totalWeightedPrice = data.getTotalWeightedPrice();
+                long totalVolume = data.getTotalVolume();
 
                 if (totalVolume > 0) {
                     double vwap = totalWeightedPrice / totalVolume;
@@ -103,7 +96,7 @@ public class VWAPCalculator {
                 }
             }
         } catch (Exception e) {
-            System.out.println("Something went wrong: " + e.getMessage());
+            LOGGER.error("Error calculating VWAP for {}: {}", currencyPair, e.getMessage());
         }
     }
 
@@ -121,21 +114,16 @@ public class VWAPCalculator {
             }
 
             Instant cutoffTime = timestamp.minusSeconds(this.cutoffSeconds);
-            Deque<CurrencyPriceData> priceStream = data.getPriceStream();
+            
+            // Get a snapshot of current prices to process for removal
+            Iterator<CurrencyPriceData> iterator = data.getDescendingIterator();
             boolean pricesRemovedFromStream = false;
 
-            // Use iterator.remove() to safely remove elements during iteration
-            Iterator<CurrencyPriceData> iterator = priceStream.descendingIterator();
             while (iterator.hasNext()) {
                 CurrencyPriceData priceData = iterator.next();
                 if (priceData.getTimestamp().isBefore(cutoffTime)) {
-                    // Subtract the price contribution before removing
-                    double weightedPrice = priceData.getPrice() * priceData.getVolume();
-                    data.setTotalWeightedPrice(data.getTotalWeightedPrice() - weightedPrice);
-                    data.setTotalVolume(data.getTotalVolume() - priceData.getVolume());
-
-                    // Use iterator's remove method instead of collection's remove
-                    data.removeItemsBeforeCutoff(cutoffTime);
+                    // Subtract from totals atomically before removing from stream
+                    data.subtractPriceDataFromTotals(priceData.getPrice(), priceData.getVolume());
                     pricesRemovedFromStream = true;
                 } else {
                     // Since data is time-ordered, we can stop once we find data within cutoff
@@ -143,10 +131,15 @@ public class VWAPCalculator {
                 }
             }
 
-            // Cleanup currency pairs without prices within cutoff time
-            if (pricesRemovedFromStream && data.getTotalVolume() <= 0) {
-                currencyPairData.remove(currencyPair);
-                LOGGER.debug("Removed currency pair {} as it has no recent price data", currencyPair);
+            // Remove the old items from the actual stream
+            if (pricesRemovedFromStream) {
+                data.removeItemsBeforeCutoff(cutoffTime);
+                
+                // Cleanup currency pairs without prices within cutoff time
+                if (data.getTotalVolume() <= 0) {
+                    currencyPairData.remove(currencyPair);
+                    LOGGER.debug("Removed currency pair {} as it has no recent price data", currencyPair);
+                }
             }
         } catch (Exception e) {
             LOGGER.error("Error during price cleanup for {}: {}", currencyPair, e.getMessage(), e);
@@ -189,4 +182,3 @@ public class VWAPCalculator {
         LOGGER.info("======================================");
     }
 }
-

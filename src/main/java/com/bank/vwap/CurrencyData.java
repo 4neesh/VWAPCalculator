@@ -12,10 +12,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class CurrencyData {
     // Fields are grouped for better cache locality
     
-    // Frequently accessed calculation fields
+    // Frequently accessed calculation fields - using atomic operations for thread safety
     private volatile double vwap;
-    private double totalWeightedPrice;
-    private long totalVolume;
+    private final DoubleAdder totalWeightedPrice;
+    private final AtomicLong totalVolume;
 
 
     // Collection and synchronization
@@ -31,8 +31,8 @@ public class CurrencyData {
     public CurrencyData() {
         // Use ArrayDeque for better memory locality and cache performance
         this.priceStream = new ArrayDeque<>(INITIAL_CAPACITY);
-        this.totalWeightedPrice = 0;
-        this.totalVolume = 0;
+        this.totalWeightedPrice = new DoubleAdder();
+        this.totalVolume = new AtomicLong(0);
         this.vwap = 0.0;
         this.lock = new ReentrantReadWriteLock();
     }
@@ -137,19 +137,45 @@ public class CurrencyData {
     }
 
     public double getTotalWeightedPrice() {
-        return totalWeightedPrice;
+        return totalWeightedPrice.sum();
     }
 
     public long getTotalVolume() {
-        return totalVolume;
+        return totalVolume.get();
     }
 
-    public void setTotalWeightedPrice(double totalWeightedPrice) {
-        this.totalWeightedPrice = totalWeightedPrice;
+    public void addToTotalWeightedPrice(double weightedPrice) {
+        totalWeightedPrice.add(weightedPrice);
     }
 
-    public void setTotalVolume(long totalVolume) {
-        this.totalVolume = totalVolume;
+    public void subtractFromTotalWeightedPrice(double weightedPrice) {
+        totalWeightedPrice.add(-weightedPrice);
+    }
+
+    public void addToTotalVolume(long volume) {
+        totalVolume.addAndGet(volume);
+    }
+
+    public void subtractFromTotalVolume(long volume) {
+        totalVolume.addAndGet(-volume);
+    }
+
+    /**
+     * Atomically add price data to totals
+     */
+    public void addPriceDataToTotals(double price, long volume) {
+        double weightedPrice = price * volume;
+        totalWeightedPrice.add(weightedPrice);
+        totalVolume.addAndGet(volume);
+    }
+
+    /**
+     * Atomically subtract price data from totals
+     */
+    public void subtractPriceDataFromTotals(double price, long volume) {
+        double weightedPrice = price * volume;
+        totalWeightedPrice.add(-weightedPrice);
+        totalVolume.addAndGet(-volume);
     }
 
     // Cache line padding to prevent false sharing
